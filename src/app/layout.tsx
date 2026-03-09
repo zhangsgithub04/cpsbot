@@ -13,8 +13,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clarify Bot | SUNY Buffalo Clarify",
-  description: "Clarify-stage facilitator for framing a challenge and generating focus questions.",
+  title: "CPS Pipeline Bot | SUNY Buffalo",
+  description: "Four-stage CPS pipeline: Clarify, Ideate, Develop, and Implement.",
 };
 
 export default function RootLayout({

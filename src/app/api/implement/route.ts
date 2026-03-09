@@ -3,6 +3,8 @@ import { getAuthedUser } from "@/lib/auth";
 import { saveClarifySession } from "@/lib/chat-sessions";
 import { ChatMessage, Provider, runStageChat } from "@/lib/stage-chat";
 
+const INITIAL_IMPLEMENT_MESSAGE = "Please complete this sentence: I am committed to...";
+
 export async function POST(request: NextRequest) {
   try {
     const authedUser = await getAuthedUser();
@@ -29,15 +31,14 @@ export async function POST(request: NextRequest) {
     if (normalized.length === 0) {
       return NextResponse.json(
         {
-          reply:
-            "Please paste your challenge using the starter **'It would be great if I/We...'**. For more information, refer to the **Clarify Step 1** section of the guide.",
+          reply: INITIAL_IMPLEMENT_MESSAGE,
           sessionId: body.sessionId ?? null,
         },
         { status: 200 },
       );
     }
 
-    const reply = await runStageChat({ stage: "clarify", messages: normalized, provider });
+    const reply = await runStageChat({ stage: "implement", messages: normalized, provider });
     const fullConversation: ChatMessage[] = [...normalized, { role: "assistant", content: reply }];
     const sessionId = await saveClarifySession({
       userId: authedUser._id,

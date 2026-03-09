@@ -37,9 +37,34 @@ type PublicUser = {
 type AuthMode = "signin" | "signup";
 type GuidedStage = "challenge" | "gather" | "hits" | "complete";
 type LlmProvider = "openai" | "gemini";
+type CpsStage = "clarify" | "ideate" | "develop" | "implement";
 
-const INITIAL_ASSISTANT_MESSAGE =
-  "Please paste your challenge using the starter **'It would be great if I/We...'**. For more information, refer to the **Clarify Step 1** section of the guide.";
+const INITIAL_ASSISTANT_MESSAGES: Record<CpsStage, string> = {
+  clarify:
+    "Please paste your challenge using the starter **'It would be great if I/We...'**. For more information, refer to the **Clarify Step 1** section of the guide.",
+  ideate:
+    "Please type your challenge as a question starting with **How might I...**, **In what ways might I...**, or **What might be all the ways to...?**",
+  develop:
+    "Please paste your statement starting with **What I see myself doing is...** along with your idea list from Ideate.",
+  implement: "Please complete this sentence: **I am committed to...**",
+};
+
+const STAGE_LABELS: Record<CpsStage, string> = {
+  clarify: "Stage 1: Clarify",
+  ideate: "Stage 2: Ideate",
+  develop: "Stage 3: Develop",
+  implement: "Stage 4: Implement",
+};
+
+const STAGE_ORDER: CpsStage[] = ["clarify", "ideate", "develop", "implement"];
+
+function getNextStage(stage: CpsStage): CpsStage | null {
+  const currentIndex = STAGE_ORDER.indexOf(stage);
+  if (currentIndex < 0 || currentIndex >= STAGE_ORDER.length - 1) {
+    return null;
+  }
+  return STAGE_ORDER[currentIndex + 1] ?? null;
+}
 
 function extractTextCodeBlocks(content: string): string[] {
   const blocks: string[] = [];
@@ -55,28 +80,123 @@ function extractTextCodeBlocks(content: string): string[] {
 }
 
 function parseNumberedItems(block: string): string[] {
+  const isAnswerTemplateLine = (value: string): boolean => /^\[[^\]]*answer[^\]]*\]$/i.test(value);
+
   return block
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => /^\d{1,2}\s*[).]\s+/.test(line))
-    .map((line) => line.replace(/^\d{1,2}\s*[).]\s+/, "").trim());
+    .map((line) => line.replace(/^\d{1,2}\s*[).]\s+/, "").trim())
+    .filter((line) => line.length > 0 && !isAnswerTemplateLine(line));
 }
 
 function parseNumberedItemsFromContent(content: string): string[] {
-  return content
+  const isAnswerTemplateLine = (value: string): boolean => /^\[[^\]]*answer[^\]]*\]$/i.test(value);
+  const lines = content
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => /^\d{1,2}\s*[).]\s+/.test(line))
-    .map((line) => line.replace(/^\d{1,2}\s*[).]\s+/, "").trim())
     .filter((line) => line.length > 0);
+
+  const collected: string[] = [];
+  let started = false;
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (!line) continue;
+
+    if (/^\d{1,2}\s*[).]\s+/.test(line)) {
+      const item = line.replace(/^\d{1,2}\s*[).]\s+/, "").trim();
+
+      if (item.length > 0 && !isAnswerTemplateLine(item)) {
+        collected.push(item);
+        started = true;
+      }
+
+      continue;
+    }
+
+    if (started) {
+      break;
+    }
+  }
+
+  return collected.reverse().filter((line) => line.length > 0);
 }
 
 function parseFocusOptionsFromContent(content: string): string[] {
+  const focusQuestionPattern = /^(how might i|in what ways might i|what might be all the ways to)\b/i;
+
   return content
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => /^[-*•]\s+what might be all the ways to\b/i.test(line))
-    .map((line) => line.replace(/^[-*•]\s+/, "").trim());
+    .map((line) => line.replace(/^[-*•]\s+/, "").replace(/^\d{1,2}\s*[).]\s+/, "").trim())
+    .filter((line) => focusQuestionPattern.test(line));
+}
+
+function isFocusQuestion(text: string): boolean {
+  return /^(how might i|in what ways might i|what might be all the ways to)\b/i.test(text.trim());
+}
+
+function isClarifyCompletionMessage(text: string): boolean {
+  return /completed the clarify stage|focus question options|thank you for choosing your focus question|thanks for sharing your favorite focus question/i.test(
+    text,
+  );
+}
+
+function parseIdeateIdeasFromContent(content: string): Array<{ number: number; text: string }> {
+  const byNumber = new Map<number, string>();
+  const lines = content.split("\n");
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const match = line.match(/^#?\s*(\d{1,3})\s*[).]\s+(.+)$/);
+    if (!match) continue;
+
+    const ideaNumber = Number.parseInt(match[1] ?? "", 10);
+    const ideaText = (match[2] ?? "").trim();
+
+    if (!Number.isFinite(ideaNumber) || ideaNumber <= 0 || !ideaText) continue;
+    if (/^Ideas so far:/i.test(ideaText)) continue;
+    byNumber.set(ideaNumber, ideaText);
+  }
+
+  return [...byNumber.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, text]) => ({ number, text }));
+}
+
+function getLastAssistantContent(messages: ChatMessage[]): string {
+  return [...messages].reverse().find((item) => item.role === "assistant")?.content?.trim() ?? "";
+}
+
+function isStageComplete(params: {
+  stage: CpsStage;
+  guidedStage: GuidedStage;
+  lastAssistantContent: string;
+}): boolean {
+  const text = params.lastAssistantContent;
+
+  if (params.stage === "clarify") {
+    return (
+      params.guidedStage === "complete" ||
+      isClarifyCompletionMessage(text) ||
+      parseFocusOptionsFromContent(text).length >= 2
+    );
+  }
+
+  if (params.stage === "ideate") {
+    return /(As stated in Step 6 in the Google Guide|Please paste the exact sentence into the text box found in Step 6|What I see myself doing is\.\.\.)/i.test(
+      text,
+    );
+  }
+
+  if (params.stage === "develop") {
+    return /(Great work).*Develop/i.test(text) || /Identifying the most promising steps for overcoming concerns/i.test(text);
+  }
+
+  return /Which 1-3 steps do you want to begin within the next 24 hours\?|Is there anything else you need today\?/i.test(text);
 }
 
 function deriveGuidedStep(assistantReply: string): {
@@ -95,14 +215,24 @@ function deriveGuidedStep(assistantReply: string): {
   }
 
   if (numberedSets.length === 0) {
-    if (assistantReply.includes("Great work! You now have a selection of focus questions")) {
+    const focusOptions = parseFocusOptionsFromContent(assistantReply);
+    if (focusOptions.length >= 2) {
+      return { stage: "complete", gatherQuestions: [], creativeQuestions: [] };
+    }
+
+    if (
+      assistantReply.includes("Great work! You now have a selection of focus questions") ||
+      isClarifyCompletionMessage(assistantReply)
+    ) {
       return { stage: "complete", gatherQuestions: [], creativeQuestions: [] };
     }
     return { stage: "challenge", gatherQuestions: [], creativeQuestions: [] };
   }
 
   const latest = numberedSets[numberedSets.length - 1];
-  const isCreativeQuestionList = latest.every((item) => /^what might be all the ways to\b/i.test(item));
+  const isCreativeQuestionList = latest.every((item) =>
+    /^(how might i|in what ways might i|what might be all the ways to)\b/i.test(item),
+  );
 
   if (isCreativeQuestionList) {
     return { stage: "hits", gatherQuestions: [], creativeQuestions: latest };
@@ -116,6 +246,7 @@ function deriveGuidedStep(assistantReply: string): {
 }
 
 export default function Home() {
+  const [stage, setStage] = useState<CpsStage>("clarify");
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [user, setUser] = useState<PublicUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -127,7 +258,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: INITIAL_ASSISTANT_MESSAGE },
+    { role: "assistant", content: INITIAL_ASSISTANT_MESSAGES.clarify },
   ]);
 
   const [guidedStage, setGuidedStage] = useState<GuidedStage>("challenge");
@@ -139,6 +270,9 @@ export default function Home() {
   const [focusOptions, setFocusOptions] = useState<string[]>([]);
   const [selectedFocusOptions, setSelectedFocusOptions] = useState<number[]>([]);
   const [focusDraft, setFocusDraft] = useState("");
+  const [refinedQuestion, setRefinedQuestion] = useState("");
+  const [selectedIdeateIdeaNumbers, setSelectedIdeateIdeaNumbers] = useState<number[]>([]);
+  const [ideateError, setIdeateError] = useState("");
   const [combineLoading, setCombineLoading] = useState(false);
   const [combineError, setCombineError] = useState("");
   const [guidedError, setGuidedError] = useState("");
@@ -207,13 +341,20 @@ export default function Home() {
     setFocusOptions([]);
     setSelectedFocusOptions([]);
     setFocusDraft("");
+    setRefinedQuestion("");
+    setSelectedIdeateIdeaNumbers([]);
+    setIdeateError("");
     setCombineError("");
     setGuidedError("");
   }
 
-  function startNewSession(): void {
+  function startNewSession(nextStage?: CpsStage): void {
+    const selectedStage = nextStage ?? stage;
+    if (nextStage) {
+      setStage(nextStage);
+    }
     setActiveSessionId(null);
-    setMessages([{ role: "assistant", content: INITIAL_ASSISTANT_MESSAGE }]);
+    setMessages([{ role: "assistant", content: INITIAL_ASSISTANT_MESSAGES[selectedStage] }]);
     setInput("");
     setError("");
     resetGuidedState();
@@ -251,6 +392,7 @@ export default function Home() {
       setFocusOptions(options);
       setSelectedFocusOptions([]);
       setFocusDraft((current) => current || options[0] || "");
+      setRefinedQuestion("");
       setCombineError("");
       setGuidedError("");
       return;
@@ -260,9 +402,26 @@ export default function Home() {
     setGuidedError("");
   }
 
-  async function submitUserMessage(rawContent: string): Promise<void> {
+  async function submitUserMessage(rawContent: string, stageOverride?: CpsStage): Promise<void> {
+    const stageToUse = stageOverride ?? stage;
     const trimmed = rawContent.trim();
-    if (!trimmed || isLoading || !user || guidedStage === "complete") return;
+    const latestAssistant = getLastAssistantContent(messages);
+    const latestUser = [...messages].reverse().find((item) => item.role === "user")?.content?.trim() ?? "";
+    const inferredRefined =
+      refinedQuestion.trim().length > 0 ? refinedQuestion.trim() : isFocusQuestion(latestUser) ? latestUser : "";
+    const clarifyLocked =
+      (guidedStage === "complete" || isClarifyCompletionMessage(latestAssistant)) && inferredRefined.length > 0;
+    const stageLocked =
+      stageToUse === stage &&
+      (stage === "clarify"
+        ? clarifyLocked
+        : isStageComplete({
+            stage,
+            guidedStage,
+            lastAssistantContent: getLastAssistantContent(messages),
+          }));
+
+    if (!trimmed || isLoading || !user || stageLocked) return;
 
     const nextMessages = [...messages, { role: "user" as const, content: trimmed }];
     setMessages(nextMessages);
@@ -271,7 +430,7 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/clarify", {
+      const response = await fetch(`/api/${stageToUse}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -285,7 +444,7 @@ export default function Home() {
 
       const payload = (await response.json()) as { reply?: string; error?: string; sessionId?: string };
       if (!response.ok || !payload.reply) {
-        throw new Error(payload.error || "Failed to generate Clarify response.");
+        throw new Error(payload.error || `Failed to generate ${STAGE_LABELS[stageToUse]} response.`);
       }
 
       setMessages((current) => [...current, { role: "assistant", content: payload.reply as string }]);
@@ -293,16 +452,91 @@ export default function Home() {
         setActiveSessionId(payload.sessionId);
       }
 
-      applyGuidedStateFromReply(payload.reply);
+      if (stageToUse === "clarify") {
+        applyGuidedStateFromReply(payload.reply);
+      } else {
+        setGuidedStage("challenge");
+        if (stageToUse === "ideate") {
+          setSelectedIdeateIdeaNumbers([]);
+          setIdeateError("");
+        }
+      }
       await refreshSessions();
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "An unexpected error occurred while contacting Clarify Bot.";
+          : `An unexpected error occurred while contacting ${STAGE_LABELS[stageToUse]}.`;
       setError(message);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function moveToNextStage(): Promise<void> {
+    const nextStage = getNextStage(stage);
+    if (!nextStage) return;
+    await transitionToStage(nextStage);
+  }
+
+  async function transitionToStage(targetStage: CpsStage): Promise<void> {
+    if (isLoading || targetStage === stage) return;
+
+    const latestUser = [...messages].reverse().find((item) => item.role === "user")?.content?.trim() ?? "";
+    const inferredRefined =
+      refinedQuestion.trim().length > 0 ? refinedQuestion.trim() : isFocusQuestion(latestUser) ? latestUser : "";
+
+    const carryover =
+      stage === "clarify" && inferredRefined.length > 0
+        ? `Refined focus question from Clarify:\n\n${inferredRefined}`
+        : [...messages].reverse().find((item) => item.role === "assistant")?.content?.trim() ?? "";
+
+    setStage(targetStage);
+    setInput("");
+    setError("");
+    resetGuidedState();
+
+    const stagedMessages: ChatMessage[] = [{ role: "assistant", content: INITIAL_ASSISTANT_MESSAGES[targetStage] }];
+    if (carryover.length > 0) {
+      stagedMessages.push({
+        role: "user",
+        content: `Carry-over output from previous stage:\n\n${carryover}`,
+      });
+    }
+
+    setMessages(stagedMessages);
+
+    if (carryover.length > 0) {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/${targetStage}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: stagedMessages,
+            sessionId: activeSessionId,
+            provider,
+          }),
+        });
+
+        const payload = (await response.json()) as { reply?: string; error?: string; sessionId?: string };
+        if (!response.ok || !payload.reply) {
+          throw new Error(payload.error || `Failed to generate ${STAGE_LABELS[targetStage]} response.`);
+        }
+
+        setMessages((current) => [...current, { role: "assistant", content: payload.reply as string }]);
+        if (payload.sessionId) {
+          setActiveSessionId(payload.sessionId);
+        }
+        await refreshSessions();
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : "Failed to transition to next stage.";
+        setError(message);
+      } finally {
+        setIsLoading(false);
+      }
     }
   }
 
@@ -327,7 +561,7 @@ export default function Home() {
       setActiveSessionId(payload.session.id);
 
       const lastAssistant = [...payload.session.messages].reverse().find((item) => item.role === "assistant");
-      if (lastAssistant) {
+      if (lastAssistant && stage === "clarify") {
         applyGuidedStateFromReply(lastAssistant.content);
       } else {
         resetGuidedState();
@@ -444,6 +678,7 @@ export default function Home() {
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (effectiveStageComplete) return;
     await submitUserMessage(input);
   }
 
@@ -483,7 +718,7 @@ export default function Home() {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
 
-    if (isLoading || guidedStage === "complete" || input.trim().length === 0) return;
+    if (isLoading || effectiveStageComplete || input.trim().length === 0) return;
     void submitUserMessage(input);
   }
 
@@ -540,6 +775,39 @@ export default function Home() {
     if (combineError) setCombineError("");
   }
 
+  function toggleIdeateIdea(number: number): void {
+    setSelectedIdeateIdeaNumbers((current) =>
+      current.includes(number) ? current.filter((value) => value !== number) : [...current, number],
+    );
+    if (ideateError) setIdeateError("");
+  }
+
+  async function submitIdeateIdeaNumbers(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (isLoading) return;
+
+    if (selectedIdeateIdeaNumbers.length === 0) {
+      setIdeateError("Select at least one idea before submitting.");
+      return;
+    }
+
+    const payload = [...selectedIdeateIdeaNumbers].sort((a, b) => a - b).join(", ");
+    await submitUserMessage(payload);
+    setSelectedIdeateIdeaNumbers([]);
+    setIdeateError("");
+  }
+
+  function setRefinedQuestionFromDraft(): void {
+    const candidate = focusDraft.trim();
+    if (!candidate) {
+      setGuidedError("Write or select a refined focus question first.");
+      return;
+    }
+
+    setRefinedQuestion(candidate);
+    setGuidedError("");
+  }
+
   async function combineSelectedFocusOptions(): Promise<void> {
     const options = selectedFocusOptions.map((idx) => focusOptions[idx]).filter(Boolean);
     if (options.length < 2) {
@@ -593,6 +861,23 @@ export default function Home() {
   const gatherCompletedCount = gatherAnswers.filter((answer) => answer.trim().length > 0).length;
   const isFirstGatherQuestion = gatherIndex === 0;
   const isLastGatherQuestion = gatherTotal > 0 && gatherIndex === gatherTotal - 1;
+  const lastAssistantContent = getLastAssistantContent(messages);
+  const lastUserContent = [...messages].reverse().find((item) => item.role === "user")?.content?.trim() ?? "";
+  const ideateIdeas = parseIdeateIdeasFromContent(lastAssistantContent);
+  const showIdeateIdeasChecklist =
+    stage === "ideate" && /FULL IDEA LIST|REVISED FULL IDEA LIST/i.test(lastAssistantContent) && ideateIdeas.length > 0;
+  const inferredRefinedQuestion =
+    refinedQuestion.trim().length > 0 ? refinedQuestion.trim() : isFocusQuestion(lastUserContent) ? lastUserContent : "";
+  const currentStageComplete = isStageComplete({
+    stage,
+    guidedStage,
+    lastAssistantContent,
+  });
+  const clarifyStageComplete =
+    (guidedStage === "complete" || isClarifyCompletionMessage(lastAssistantContent)) && inferredRefinedQuestion.length > 0;
+  const effectiveStageComplete = stage === "clarify" ? clarifyStageComplete : currentStageComplete;
+  const currentStageIndex = STAGE_ORDER.indexOf(stage);
+  const maxUnlockedStageIndex = user ? currentStageIndex + (effectiveStageComplete ? 1 : 0) : -1;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,#f7eed4_0%,#edf2f4_45%,#eaf4eb_100%)] p-4 sm:p-8">
@@ -707,10 +992,10 @@ export default function Home() {
 
         <section className="flex flex-col gap-4 rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-6">
           <header className="rounded-2xl bg-[#1e2a38] p-5 text-[#f8f4e7]">
-            <p className="text-xs uppercase tracking-[0.18em] text-[#d4e1eb]">SUNY Buffalo Clarify</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Clarify Bot</h1>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#d4e1eb]">SUNY Buffalo CPS Pipeline</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{STAGE_LABELS[stage]}</h1>
             <p className="mt-2 max-w-2xl text-sm text-[#d9e4eb] sm:text-base">
-              Clarify-stage facilitator for challenge framing, context gathering, and focus-question options.
+              Four-stage flow: Clarify, Ideate, Develop, and Implement. Continue stage by stage.
             </p>
             {user ? (
               <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs">
@@ -733,6 +1018,34 @@ export default function Home() {
                 </select>
               </div>
             ) : null}
+
+            <div className="mt-4 rounded-xl border border-white/15 bg-white/8 p-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[#d4e1eb]">4-Stage Pipeline</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {STAGE_ORDER.map((entry, index) => {
+                  const unlocked = user ? index <= maxUnlockedStageIndex : false;
+                  const isActive = entry === stage;
+
+                  return (
+                    <button
+                      key={entry}
+                      type="button"
+                      onClick={() => void transitionToStage(entry)}
+                      disabled={isLoading || !unlocked || isActive}
+                      className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition ${
+                        isActive
+                          ? "border-[#f8f4e7] bg-[#f8f4e7] text-[#1e2a38]"
+                          : unlocked
+                            ? "border-[#c8d6e3]/70 bg-[#284053]/45 text-[#edf3f8] hover:bg-[#365066]"
+                            : "border-white/20 bg-white/5 text-[#93a7b8]"
+                      }`}
+                    >
+                      {STAGE_LABELS[entry]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </header>
 
           {!user ? (
@@ -839,12 +1152,12 @@ export default function Home() {
 
                 {isLoading ? (
                   <article className="rounded-2xl bg-[#edf2f7] p-3 text-sm text-[#1f2933] sm:p-4 sm:text-[0.95rem]">
-                    Clarify Bot is thinking...
+                    {STAGE_LABELS[stage]} is thinking...
                   </article>
                 ) : null}
               </section>
 
-              {guidedStage === "gather" ? (
+              {stage === "clarify" && guidedStage === "gather" ? (
                 <section className="space-y-4 rounded-2xl border border-[#2f6a4f]/20 bg-[#f4faf6] p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-[#214734]">Step 2 - Gather Data Wizard</p>
@@ -908,7 +1221,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {guidedStage === "hits" ? (
+              {stage === "clarify" && guidedStage === "hits" ? (
                 <form
                   className="space-y-3 rounded-2xl border border-[#2f6a4f]/20 bg-[#f4faf6] p-4"
                   onSubmit={submitHitNumbers}
@@ -957,7 +1270,54 @@ export default function Home() {
                 </form>
               ) : null}
 
-              {guidedStage !== "gather" && guidedStage !== "hits" && guidedStage !== "complete" ? (
+              {showIdeateIdeasChecklist ? (
+                <form
+                  className="space-y-3 rounded-2xl border border-[#2f6a4f]/20 bg-[#f4faf6] p-4"
+                  onSubmit={submitIdeateIdeaNumbers}
+                >
+                  <p className="text-sm font-semibold text-[#214734]">Ideate - Select Idea Hits</p>
+                  <p className="text-xs text-muted-foreground">Choose ideas with checkboxes and submit their numbers.</p>
+
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {ideateIdeas.map((idea) => {
+                      const selected = selectedIdeateIdeaNumbers.includes(idea.number);
+
+                      return (
+                        <label
+                          key={`${idea.number}-${idea.text}`}
+                          className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                            selected ? "border-[#2f6a4f] bg-[#eaf6ef]" : "border-black/10 bg-white"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={selected}
+                            onChange={() => toggleIdeateIdea(idea.number)}
+                            disabled={isLoading}
+                          />
+                          <span>
+                            {idea.number}) {idea.text}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {ideateError ? <p className="text-sm text-red-700">{ideateError}</p> : null}
+
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">Selected: {selectedIdeateIdeaNumbers.length}</p>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? "Submitting..." : "Submit Idea Numbers"}
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
+
+              {!(stage === "clarify" && (guidedStage === "gather" || guidedStage === "hits" || guidedStage === "complete")) &&
+              !showIdeateIdeasChecklist &&
+              !effectiveStageComplete ? (
                 <form className="space-y-2" onSubmit={sendMessage}>
                   <textarea
                     className="min-h-28 w-full resize-y rounded-2xl border border-black/15 bg-white px-4 py-3 text-sm outline-none ring-0 transition focus:border-[#2f6a4f] focus:shadow-[0_0_0_3px_rgba(47,106,79,0.14)] disabled:opacity-60"
@@ -969,7 +1329,10 @@ export default function Home() {
                   />
                   {error ? <p className="text-sm text-red-700">{error}</p> : null}
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">Stage: {guidedStage}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Pipeline: {STAGE_LABELS[stage]}
+                      {stage === "clarify" ? ` | Clarify step: ${guidedStage}` : ""}
+                    </p>
                     <Button type="submit" disabled={isLoading || input.trim().length === 0}>
                       {isLoading ? "Sending..." : "Send"}
                     </Button>
@@ -977,7 +1340,7 @@ export default function Home() {
                 </form>
               ) : null}
 
-              {guidedStage === "complete" ? (
+              {stage === "clarify" && guidedStage === "complete" ? (
                 <section className="space-y-3 rounded-2xl border border-[#2f6a4f]/20 bg-[#f4faf6] p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[#214734]">Step 5 - Focus Question Composer</p>
@@ -1049,6 +1412,48 @@ export default function Home() {
                       placeholder="Your final focus question will appear here."
                     />
                   </div>
+
+                  <div className="rounded-xl border border-[#bfd7c6] bg-white p-3">
+                    <p className="text-sm font-semibold text-[#214734]">Step 6 - Pick Refined Question</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Confirm one refined question to finish Clarify and unlock Ideate.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={setRefinedQuestionFromDraft}
+                        disabled={combineLoading || focusDraft.trim().length === 0}
+                      >
+                        Use Draft as Refined Question
+                      </Button>
+                    </div>
+
+                    {refinedQuestion.trim().length > 0 ? (
+                      <p className="mt-3 rounded-lg border border-[#cddfd3] bg-[#f1f8f3] px-3 py-2 text-sm text-[#214734]">
+                        Refined Question Locked: {refinedQuestion}
+                      </p>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {user && effectiveStageComplete ? (
+                <section className="rounded-2xl border border-[#0f2740]/20 bg-[#f7fafc] p-4 shadow-sm sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[#0f2740]">Stage Complete</p>
+                    <span className="rounded-full bg-[#dbe8f4] px-2.5 py-1 text-[11px] font-medium text-[#1f4f7a]">
+                      {STAGE_LABELS[stage]}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#496176]">Proceed to the next stage or revisit unlocked stages.</p>
+
+                  {getNextStage(stage) ? (
+                    <div className="mt-3 flex justify-end">
+                      <Button type="button" className="h-9" onClick={() => void moveToNextStage()} disabled={isLoading}>
+                        Continue to {STAGE_LABELS[getNextStage(stage) as CpsStage]}
+                      </Button>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
             </>
