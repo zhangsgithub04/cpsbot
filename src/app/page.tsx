@@ -56,6 +56,13 @@ const STAGE_LABELS: Record<CpsStage, string> = {
   implement: "Stage 4: Implement",
 };
 
+const STAGE_SHORT_LABELS: Record<CpsStage, string> = {
+  clarify: "Clarify",
+  ideate: "Ideate",
+  develop: "Develop",
+  implement: "Implement",
+};
+
 const STAGE_ORDER: CpsStage[] = ["clarify", "ideate", "develop", "implement"];
 
 function getNextStage(stage: CpsStage): CpsStage | null {
@@ -880,8 +887,18 @@ export default function Home() {
   const maxUnlockedStageIndex = user ? currentStageIndex + (effectiveStageComplete ? 1 : 0) : -1;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,#f7eed4_0%,#edf2f4_45%,#eaf4eb_100%)] p-4 sm:p-8">
-      <main className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[280px_1fr]">
+    <div
+      className={`min-h-screen bg-[radial-gradient(circle_at_15%_10%,#f7eed4_0%,#edf2f4_45%,#eaf4eb_100%)] p-4 sm:p-8 ${
+        user ? "" : "flex items-center justify-center"
+      }`}
+    >
+      <main
+        className={
+          user
+            ? "mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[280px_1fr]"
+            : "mx-auto w-full max-w-3xl"
+        }
+      >
         {user ? (
           <aside className="space-y-4">
             <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
@@ -990,12 +1007,18 @@ export default function Home() {
           </aside>
         ) : null}
 
-        <section className="flex flex-col gap-4 rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-6">
-          <header className="rounded-2xl bg-[#1e2a38] p-5 text-[#f8f4e7]">
+        <section
+          className={`flex flex-col gap-4 border border-black/10 bg-white/90 shadow-xl backdrop-blur ${
+            user ? "rounded-3xl p-4 sm:p-6" : "rounded-[2.25rem] p-5 sm:p-8"
+          }`}
+        >
+          <header className={`rounded-2xl bg-[#1e2a38] text-[#f8f4e7] ${user ? "p-5" : "p-6 sm:p-8"}`}>
             <p className="text-xs uppercase tracking-[0.18em] text-[#d4e1eb]">SUNY Buffalo CPS Pipeline</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{STAGE_LABELS[stage]}</h1>
-            <p className="mt-2 max-w-2xl text-sm text-[#d9e4eb] sm:text-base">
-              Four-stage flow: Clarify, Ideate, Develop, and Implement. Continue stage by stage.
+            <h1 className={`mt-3 font-semibold tracking-tight ${user ? "text-2xl sm:text-3xl" : "text-4xl sm:text-5xl"}`}>
+              {user ? STAGE_LABELS[stage] : "CPS Pipeline"}
+            </h1>
+            <p className={`mt-3 max-w-2xl text-[#d9e4eb] ${user ? "text-sm sm:text-base" : "text-lg sm:text-xl"}`}>
+              {user ? "Clarify, Ideate, Develop, Implement." : "4 stages. Clear path."}
             </p>
             {user ? (
               <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs">
@@ -1019,9 +1042,9 @@ export default function Home() {
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-xl border border-white/15 bg-white/8 p-3">
+            <div className={`mt-5 rounded-xl border border-white/15 bg-white/8 ${user ? "p-3" : "p-4"}`}>
               <p className="text-[11px] uppercase tracking-[0.14em] text-[#d4e1eb]">4-Stage Pipeline</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className={`mt-3 grid gap-2 ${user ? "sm:grid-cols-2 lg:grid-cols-4" : "grid-cols-2 sm:grid-cols-4"}`}>
                 {STAGE_ORDER.map((entry, index) => {
                   const unlocked = user ? index <= maxUnlockedStageIndex : false;
                   const isActive = entry === stage;
@@ -1032,15 +1055,15 @@ export default function Home() {
                       type="button"
                       onClick={() => void transitionToStage(entry)}
                       disabled={isLoading || !unlocked || isActive}
-                      className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition ${
+                      className={`rounded-lg border px-3 py-2 text-left font-semibold transition ${
                         isActive
                           ? "border-[#f8f4e7] bg-[#f8f4e7] text-[#1e2a38]"
                           : unlocked
                             ? "border-[#c8d6e3]/70 bg-[#284053]/45 text-[#edf3f8] hover:bg-[#365066]"
                             : "border-white/20 bg-white/5 text-[#93a7b8]"
-                      }`}
+                      } ${user ? "text-xs" : "text-sm"}`}
                     >
-                      {STAGE_LABELS[entry]}
+                      {user ? STAGE_LABELS[entry] : STAGE_SHORT_LABELS[entry]}
                     </button>
                   );
                 })}
@@ -1049,7 +1072,7 @@ export default function Home() {
           </header>
 
           {!user ? (
-            <section className="rounded-2xl border border-black/10 bg-[#fbfbf9] p-4 sm:p-5">
+            <section className="mx-auto w-full max-w-xl rounded-2xl border border-black/10 bg-[#fbfbf9] p-5 sm:p-6">
               <div className="mb-4 flex gap-2">
                 <Button
                   type="button"
@@ -1085,7 +1108,7 @@ export default function Home() {
                 <input
                   className="w-full rounded-xl border border-black/15 bg-white px-4 py-2.5 text-sm outline-none focus:border-[#2f6a4f]"
                   type="password"
-                  placeholder="Password (min 8 characters)"
+                  placeholder="Password (8+ characters)"
                   value={authPassword}
                   onChange={(event) => setAuthPassword(event.target.value)}
                   required
