@@ -211,6 +211,15 @@ function deriveGuidedStep(assistantReply: string): {
   gatherQuestions: string[];
   creativeQuestions: string[];
 } {
+  if (
+    /clustered themes|final clustering|focus question options|thank you for your selections|choose one that feels most inspiring|choose one that feels most useful/i.test(
+      assistantReply,
+    ) ||
+    isClarifyCompletionMessage(assistantReply)
+  ) {
+    return { stage: "complete", gatherQuestions: [], creativeQuestions: [] };
+  }
+
   const blocks = extractTextCodeBlocks(assistantReply);
   const numberedSets: string[][] = blocks
     .map((block) => parseNumberedItems(block))
@@ -1013,12 +1022,12 @@ export default function Home() {
           }`}
         >
           <header className={`rounded-2xl bg-[#1e2a38] text-[#f8f4e7] ${user ? "p-5" : "p-6 sm:p-8"}`}>
-            <p className="text-xs uppercase tracking-[0.18em] text-[#d4e1eb]">SUNY Buffalo CPS Pipeline</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#d4e1eb]">SUNY Buffalo CPS Pipeline Implemented by SUNY Oneonta</p>
             <h1 className={`mt-3 font-semibold tracking-tight ${user ? "text-2xl sm:text-3xl" : "text-4xl sm:text-5xl"}`}>
               {user ? STAGE_LABELS[stage] : "CPS Pipeline"}
             </h1>
             <p className={`mt-3 max-w-2xl text-[#d9e4eb] ${user ? "text-sm sm:text-base" : "text-lg sm:text-xl"}`}>
-              {user ? "Clarify, Ideate, Develop, Implement." : "4 stages. Clear path."}
+              {user ? "Clarify, Ideate, Develop, Implement." : "Four stages. Clear path."}
             </p>
             {user ? (
               <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs">
@@ -1043,7 +1052,7 @@ export default function Home() {
             ) : null}
 
             <div className={`mt-5 rounded-xl border border-white/15 bg-white/8 ${user ? "p-3" : "p-4"}`}>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-[#d4e1eb]">4-Stage Pipeline</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[#d4e1eb]">Four-Stage Pipeline</p>
               <div className={`mt-3 grid gap-2 ${user ? "sm:grid-cols-2 lg:grid-cols-4" : "grid-cols-2 sm:grid-cols-4"}`}>
                 {STAGE_ORDER.map((entry, index) => {
                   const unlocked = user ? index <= maxUnlockedStageIndex : false;

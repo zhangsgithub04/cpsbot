@@ -13,7 +13,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CPS Pipeline Bot | SUNY Buffalo",
+  title: "CPS Pipeline Bot | SUNY Buffalo SUNY Oneonta",
   description: "Four-stage CPS pipeline: Clarify, Ideate, Develop, and Implement.",
 };
 
