@@ -3,6 +3,7 @@
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 type ChatMessage = {
@@ -911,6 +912,20 @@ export default function Home() {
         {user ? (
           <aside className="space-y-4">
             <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
+              <p className="text-xs uppercase tracking-[0.12em] text-[#1e2a38]">Account</p>
+              <p className="mt-2 truncate text-sm font-medium text-[#1f2933]">{user.email}</p>
+              <Link
+                href="/tutorial"
+                className="mt-3 block rounded-md border border-black/15 px-3 py-2 text-center text-sm font-medium text-[#1f2933] hover:bg-[#f5f8fb]"
+              >
+                Open Tutorial
+              </Link>
+              <Button type="button" variant="outline" className="mt-3 h-8 w-full" onClick={() => void signOut()}>
+                Sign out
+              </Button>
+            </section>
+
+            <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1e2a38]">Sessions</h2>
                 <Button type="button" variant="outline" className="h-8" onClick={() => startNewSession()}>
@@ -1030,14 +1045,6 @@ export default function Home() {
               {user ? "Clarify, Ideate, Develop, Implement." : "Four stages. Clear path."}
             </p>
             {user ? (
-              <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs">
-                <span>Signed in as {user.email}</span>
-                <Button type="button" variant="secondary" className="h-8" onClick={() => void signOut()}>
-                  Sign out
-                </Button>
-              </div>
-            ) : null}
-            {user ? (
               <div className="mt-2 flex items-center gap-2 text-xs text-[#d9e4eb]">
                 <span>Provider</span>
                 <select
@@ -1082,6 +1089,12 @@ export default function Home() {
 
           {!user ? (
             <section className="mx-auto w-full max-w-xl rounded-2xl border border-black/10 bg-[#fbfbf9] p-5 sm:p-6">
+              <Link
+                href="/tutorial"
+                className="mb-4 inline-flex rounded-md border border-black/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-[#1e2a38] hover:bg-[#f5f8fb]"
+              >
+                View CPS Tutorial
+              </Link>
               <div className="mb-4 flex gap-2">
                 <Button
                   type="button"
