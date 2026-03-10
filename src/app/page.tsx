@@ -904,7 +904,7 @@ export default function Home() {
             <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1e2a38]">Sessions</h2>
-                <Button type="button" variant="outline" className="h-8" onClick={startNewSession}>
+                <Button type="button" variant="outline" className="h-8" onClick={() => startNewSession()}>
                   New
                 </Button>
               </div>
