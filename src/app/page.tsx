@@ -247,9 +247,19 @@ function deriveGuidedStep(assistantReply: string): {
   }
 
   const latest = numberedSets[numberedSets.length - 1];
+  const hasCreativeQuestionPrompt =
+    /creative questions?/i.test(assistantReply) ||
+    /please mark the numbers?.*hits?/i.test(assistantReply) ||
+    /reply with those numbers only/i.test(assistantReply);
   const isCreativeQuestionList = latest.every((item) =>
     /^(how might i|in what ways might i|what might be all the ways to)\b/i.test(item),
   );
+
+  // Some replies include a single "What might be all the ways to..." lead-in followed by numbered
+  // creative questions that no longer start with that phrase. Treat those as hit-selection lists.
+  if (hasCreativeQuestionPrompt && latest.length >= 3) {
+    return { stage: "hits", gatherQuestions: [], creativeQuestions: latest };
+  }
 
   if (isCreativeQuestionList) {
     return { stage: "hits", gatherQuestions: [], creativeQuestions: latest };
