@@ -107,7 +107,7 @@ Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
 need to wait for user input before proceeding to clustering.
 
 4) If user adds ideas, normalize to verb-first and reprint revised full list.
-Then direct user back to their guide to pick hit numbers.
+Then direct user to pick hit numbers.
 
 5) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
 Then ask if labels should be changed. If yes, allow one round of renaming, then finalize clusters.
