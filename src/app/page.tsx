@@ -39,6 +39,7 @@ type AuthMode = "signin" | "signup";
 type GuidedStage = "challenge" | "gather" | "hits" | "complete";
 type LlmProvider = "openai" | "gemini";
 type CpsStage = "clarify" | "ideate" | "develop" | "implement";
+type SidebarTab = "sessions" | "topics";
 
 const INITIAL_ASSISTANT_MESSAGES: Record<CpsStage, string> = {
   clarify:
@@ -318,6 +319,7 @@ export default function Home() {
   const [savedSessions, setSavedSessions] = useState<ChatSessionSummary[]>([]);
   const [sharedTopics, setSharedTopics] = useState<SharedTopicSummary[]>([]);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
 
   useEffect(() => {
     async function loadSession() {
@@ -922,7 +924,7 @@ export default function Home() {
       <main
         className={
           user
-            ? "mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[280px_1fr]"
+            ? "mx-auto grid w-full max-w-[1500px] gap-5 lg:grid-cols-[320px_minmax(0,1fr)]"
             : "mx-auto w-full max-w-3xl"
         }
       >
@@ -944,106 +946,129 @@ export default function Home() {
 
             <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1e2a38]">Sessions</h2>
-                <Button type="button" variant="outline" className="h-8" onClick={() => startNewSession()}>
-                  New
-                </Button>
+                <div className="inline-flex rounded-lg border border-black/10 bg-white p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("sessions")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      sidebarTab === "sessions"
+                        ? "bg-[#1e2a38] text-[#f8f4e7]"
+                        : "text-[#1e2a38] hover:bg-[#f5f8fb]"
+                    }`}
+                  >
+                    Sessions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("topics")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      sidebarTab === "topics"
+                        ? "bg-[#1e2a38] text-[#f8f4e7]"
+                        : "text-[#1e2a38] hover:bg-[#f5f8fb]"
+                    }`}
+                  >
+                    Shared Topics
+                  </button>
+                </div>
+
+                {sidebarTab === "sessions" ? (
+                  <Button type="button" variant="outline" className="h-8" onClick={() => startNewSession()}>
+                    New
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" className="h-8" onClick={() => void refreshSharedTopics()}>
+                    Refresh
+                  </Button>
+                )}
               </div>
 
-              <div className="mt-3 space-y-2">
-                {savedSessions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No saved sessions yet.</p>
-                ) : (
-                  savedSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
-                        activeSessionId === session.id
-                          ? "border-[#2f6a4f] bg-[#e9f4ee]"
-                          : "border-black/10 bg-white hover:bg-[#f8faf9]"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="w-full text-left"
-                        onClick={() => void loadChatSession(session.id)}
-                        disabled={loadingSessionId === session.id}
+              {sidebarTab === "sessions" ? (
+                <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                  {savedSessions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No saved sessions yet.</p>
+                  ) : (
+                    savedSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+                          activeSessionId === session.id
+                            ? "border-[#2f6a4f] bg-[#e9f4ee]"
+                            : "border-black/10 bg-white hover:bg-[#f8faf9]"
+                        }`}
                       >
-                        <p className="truncate font-medium text-[#1f2933]">{session.title}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {new Date(session.updatedAt).toLocaleString()}
-                        </p>
-                      </button>
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => void loadChatSession(session.id)}
+                          disabled={loadingSessionId === session.id}
+                        >
+                          <p className="truncate font-medium text-[#1f2933]">{session.title}</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {new Date(session.updatedAt).toLocaleString()}
+                          </p>
+                        </button>
 
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-7 text-[11px]"
-                          onClick={() =>
-                            void toggleSessionShare(session.id, "topic", !session.isTopicShared)
-                          }
-                        >
-                          {session.isTopicShared ? "Unshare Topic" : "Share Topic"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-7 text-[11px]"
-                          onClick={() =>
-                            void toggleSessionShare(session.id, "session", !session.isSessionShared)
-                          }
-                        >
-                          {session.isSessionShared ? "Unshare Session" : "Share Session"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-7 text-[11px]"
-                          onClick={() => void deleteSession(session.id)}
-                        >
-                          Delete
-                        </Button>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() =>
+                              void toggleSessionShare(session.id, "topic", !session.isTopicShared)
+                            }
+                          >
+                            {session.isTopicShared ? "Unshare Topic" : "Share Topic"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() =>
+                              void toggleSessionShare(session.id, "session", !session.isSessionShared)
+                            }
+                          >
+                            {session.isSessionShared ? "Unshare Session" : "Share Session"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() => void deleteSession(session.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-black/10 bg-white/90 p-4 shadow-xl backdrop-blur sm:p-5">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1e2a38]">Shared Topics</h2>
-                <Button type="button" variant="outline" className="h-8" onClick={() => void refreshSharedTopics()}>
-                  Refresh
-                </Button>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {sharedTopics.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No shared topics yet.</p>
-                ) : (
-                  sharedTopics.map((topic) => (
-                    <div key={topic.id} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs">
-                      <p className="truncate font-medium text-[#1f2933]">{topic.title}</p>
-                      <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{topic.topicPrompt}</p>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-muted-foreground">
-                          {new Date(topic.updatedAt).toLocaleDateString()}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-7 text-[11px]"
-                          onClick={() => applySharedTopic(topic.topicPrompt)}
-                        >
-                          Use Topic
-                        </Button>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                  {sharedTopics.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No shared topics yet.</p>
+                  ) : (
+                    sharedTopics.map((topic) => (
+                      <div key={topic.id} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs">
+                        <p className="truncate font-medium text-[#1f2933]">{topic.title}</p>
+                        <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{topic.topicPrompt}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(topic.updatedAt).toLocaleDateString()}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() => applySharedTopic(topic.topicPrompt)}
+                          >
+                            Use Topic
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </section>
           </aside>
         ) : null}
