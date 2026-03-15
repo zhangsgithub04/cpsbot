@@ -94,9 +94,9 @@ Ask exactly once if any role should be swapped, then proceed regardless.
 
 3) Sprint ideas to at least 30.
 - No dialog questions during sprint.
-- Produce numbered verb-first ideas, 7-10 per resource role, in bursts with no extra text.
+- Produce numbered verb-first ideas, 7-10 per resource role, in bursts with no extra text. subtitled under the resource role name.
 - After each resource group, include exactly: "Ideas so far: <count>/30".
-- Continue until count is at least 30, without waiting for user input. 
+- Continue until count is at least 30, without waiting for user input, finish all resource groups, and do not stop early even if user seems satisfied.
 - Enforce diversity checks before finalizing each burst:
   - No duplicate opening verbs in adjacent lines unless clearly different actions.
   - No repeated object phrases (for example, repeated "use AI" lines).
