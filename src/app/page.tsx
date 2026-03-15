@@ -211,7 +211,8 @@ function isStageComplete(params: {
   }
 
   return (
-    /implement stage complete\. workflow complete\./i.test(text) ||
+    /implement stage complete/i.test(text) ||
+    /workflow complete/i.test(text) ||
     /thank you! i will check in with you next week|good luck starting your action steps|great choices! you will begin with|is there anything else you need help with right now\? would you like to schedule a check-in next week/i.test(
       text,
     )
@@ -1539,7 +1540,7 @@ export default function Home() {
                   </div>
                   <p className="mt-1 text-xs text-[#496176]">
                     {stage === "implement"
-                      ? "Congratulations. You completed all four CPS stages and finished the full workflow."
+                      ? "Congratulations. You completed all four CPS stages and this session is now closed. Start a new session for your next problem."
                       : "Proceed to the next stage or revisit unlocked stages."}
                   </p>
 
@@ -1551,6 +1552,12 @@ export default function Home() {
                           : stage === "develop"
                             ? "Proceed to Stage 4: Implement"
                             : `Continue to ${STAGE_LABELS[getNextStage(stage) as CpsStage]}`}
+                      </Button>
+                    </div>
+                  ) : stage === "implement" ? (
+                    <div className="mt-3 flex justify-end">
+                      <Button type="button" className="h-9" onClick={() => startNewSession("clarify")} disabled={isLoading}>
+                        Start New Session
                       </Button>
                     </div>
                   ) : null}
