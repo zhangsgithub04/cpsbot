@@ -28,6 +28,7 @@ type SessionRecord = {
   userId: ObjectId;
   tokenHash: string;
   createdAt: Date;
+  lastSeenAt: Date;
   expiresAt: Date;
 };
 
@@ -99,6 +100,7 @@ export async function createSession(userId: ObjectId): Promise<string> {
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashSessionToken(token);
   const createdAt = new Date();
+  const lastSeenAt = createdAt;
   const expiresAt = new Date(createdAt);
   expiresAt.setDate(expiresAt.getDate() + SESSION_DAYS);
 
@@ -106,6 +108,7 @@ export async function createSession(userId: ObjectId): Promise<string> {
     userId,
     tokenHash,
     createdAt,
+    lastSeenAt,
     expiresAt,
   };
 
@@ -132,6 +135,82 @@ export async function clearSessionCookie(): Promise<void> {
 export async function deleteSessionByToken(token: string): Promise<void> {
   const db = await getDb();
   await db.collection<SessionRecord>("sessions").deleteOne({ tokenHash: hashSessionToken(token) });
+}
+
+export async function touchSessionByToken(token: string): Promise<void> {
+  const db = await getDb();
+  await db.collection<SessionRecord>("sessions").updateOne(
+    {
+      tokenHash: hashSessionToken(token),
+      expiresAt: { $gt: new Date() },
+    },
+    {
+      $set: {
+        lastSeenAt: new Date(),
+      },
+    },
+  );
+}
+
+export async function listOnlineUsers(windowMs = 2 * 60 * 1000): Promise<PublicUser[]> {
+  const db = await getDb();
+  const now = new Date();
+  const threshold = new Date(now.getTime() - windowMs);
+
+  const online = await db
+    .collection<SessionRecord>("sessions")
+    .aggregate<{
+      _id: ObjectId;
+      email: string;
+      createdAt: Date;
+    }>([
+      {
+        $match: {
+          expiresAt: { $gt: now },
+          lastSeenAt: { $gte: threshold },
+        },
+      },
+      {
+        $sort: {
+          userId: 1,
+          lastSeenAt: -1,
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          lastSeenAt: { $first: "$lastSeenAt" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: "$user._id",
+          email: "$user.email",
+          createdAt: "$user.createdAt",
+        },
+      },
+      {
+        $sort: {
+          email: 1,
+        },
+      },
+    ])
+    .toArray();
+
+  return online.map((user) => ({
+    id: user._id.toHexString(),
+    email: user.email,
+    createdAt: user.createdAt.toISOString(),
+  }));
 }
 
 export async function getAuthedUser(): Promise<UserRecord | null> {

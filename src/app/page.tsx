@@ -39,7 +39,7 @@ type AuthMode = "signin" | "signup";
 type GuidedStage = "challenge" | "gather" | "hits" | "complete";
 type LlmProvider = "openai" | "gemini";
 type CpsStage = "clarify" | "ideate" | "develop" | "implement";
-type SidebarTab = "sessions" | "topics";
+type SidebarTab = "sessions" | "topics" | "online";
 
 const INITIAL_ASSISTANT_MESSAGES: Record<CpsStage, string> = {
   clarify:
@@ -322,6 +322,7 @@ export default function Home() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [savedSessions, setSavedSessions] = useState<ChatSessionSummary[]>([]);
   const [sharedTopics, setSharedTopics] = useState<SharedTopicSummary[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<PublicUser[]>([]);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
 
@@ -345,12 +346,47 @@ export default function Home() {
     if (!user) {
       setSavedSessions([]);
       setSharedTopics([]);
+      setOnlineUsers([]);
       setActiveSessionId(null);
       return;
     }
 
     void refreshSessions();
     void refreshSharedTopics();
+    void refreshOnlineUsers();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let stopped = false;
+
+    async function pingAndRefreshOnline() {
+      try {
+        await fetch("/api/auth/ping", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        // Ignore transient network errors; next interval will retry.
+      }
+
+      if (!stopped) {
+        await refreshOnlineUsers();
+      }
+    }
+
+    void pingAndRefreshOnline();
+    const intervalId = setInterval(() => {
+      void pingAndRefreshOnline();
+    }, 30_000);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
   }, [user]);
 
   async function refreshSessions(): Promise<ChatSessionSummary[]> {
@@ -368,6 +404,19 @@ export default function Home() {
     const payload = (await response.json()) as { topics?: SharedTopicSummary[] };
     if (response.ok && Array.isArray(payload.topics)) {
       setSharedTopics(payload.topics);
+    }
+  }
+
+  async function refreshOnlineUsers(): Promise<void> {
+    const response = await fetch("/api/auth/online", { cache: "no-store" });
+    const payload = (await response.json()) as { users?: PublicUser[] };
+    if (response.ok && Array.isArray(payload.users)) {
+      setOnlineUsers(payload.users);
+      return;
+    }
+
+    if (response.status === 401) {
+      setOnlineUsers([]);
     }
   }
 
@@ -973,14 +1022,29 @@ export default function Home() {
                   >
                     Shared Topics
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("online")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                      sidebarTab === "online"
+                        ? "bg-[#1e2a38] text-[#f8f4e7]"
+                        : "text-[#1e2a38] hover:bg-[#f5f8fb]"
+                    }`}
+                  >
+                    Online
+                  </button>
                 </div>
 
                 {sidebarTab === "sessions" ? (
                   <Button type="button" variant="outline" className="h-8" onClick={() => startNewSession()}>
                     New
                   </Button>
-                ) : (
+                ) : sidebarTab === "topics" ? (
                   <Button type="button" variant="outline" className="h-8" onClick={() => void refreshSharedTopics()}>
+                    Refresh
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" className="h-8" onClick={() => void refreshOnlineUsers()}>
                     Refresh
                   </Button>
                 )}
@@ -1046,7 +1110,7 @@ export default function Home() {
                     ))
                   )}
                 </div>
-              ) : (
+              ) : sidebarTab === "topics" ? (
                 <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
                   {sharedTopics.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No shared topics yet.</p>
@@ -1068,6 +1132,20 @@ export default function Home() {
                             Use Topic
                           </Button>
                         </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                  <p className="text-xs text-muted-foreground">Active in the last 2 minutes: {onlineUsers.length}</p>
+                  {onlineUsers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No users online right now.</p>
+                  ) : (
+                    onlineUsers.map((onlineUser) => (
+                      <div key={onlineUser.id} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs">
+                        <p className="truncate font-medium text-[#1f2933]">{onlineUser.email}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">Joined: {new Date(onlineUser.createdAt).toLocaleDateString()}</p>
                       </div>
                     ))
                   )}
