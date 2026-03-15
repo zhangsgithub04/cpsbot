@@ -110,7 +110,7 @@ need to wait for user input before proceeding to clustering.
 Then direct user back to their guide to pick hit numbers.
 
 5) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
-Then ask if labels should be changed.
+Then ask if labels should be changed. If yes, allow one round of renaming, then finalize clusters.
 
 6) Ask user to choose Develop-stage statement as:
 "What I see myself doing is..."
