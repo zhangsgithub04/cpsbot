@@ -42,11 +42,11 @@ type CpsStage = "clarify" | "ideate" | "develop" | "implement";
 
 const INITIAL_ASSISTANT_MESSAGES: Record<CpsStage, string> = {
   clarify:
-    "Please paste your challenge using the starter **'It would be great if I/We...'**. For more information, refer to the **Clarify Step 1** section of the guide.",
+    "Please share your challenge using the starter **'It would be great if I/We...'**.",
   ideate:
     "Please type your challenge as a question starting with **How might I...**, **In what ways might I...**, or **What might be all the ways to...?**",
   develop:
-    "Please paste your statement starting with **What I see myself doing is...** along with your idea list from Ideate.",
+    "Please share your statement starting with **What I see myself doing is...** along with your idea list from Ideate.",
   implement: "Please complete this sentence: **I am committed to...**",
 };
 
@@ -195,7 +195,7 @@ function isStageComplete(params: {
   }
 
   if (params.stage === "ideate") {
-    return /(As stated in Step 6 in the Google Guide|Please paste the exact sentence into the text box found in Step 6|What I see myself doing is\.\.\.|proceed(?:ing)?\s+to\s+develop\s+stage|continue\s+to\s+develop\s+stage|ready\s+to\s+move\s+to\s+develop)/i.test(
+    return /(what i see myself doing is|proceed(?:ing)?\s+to\s+(?:the\s+)?develop\s+stage|continue\s+to\s+(?:the\s+)?develop\s+stage|ready\s+to\s+move\s+to\s+(?:the\s+)?develop|want\s+to\s+proceed\s+to\s+(?:the\s+)?develop\s+stage)/i.test(
       text,
     );
   }
@@ -1376,7 +1376,7 @@ export default function Home() {
                 <form className="space-y-2" onSubmit={sendMessage}>
                   <textarea
                     className="min-h-28 w-full resize-y rounded-2xl border border-black/15 bg-white px-4 py-3 text-sm outline-none ring-0 transition focus:border-[#2f6a4f] focus:shadow-[0_0_0_3px_rgba(47,106,79,0.14)] disabled:opacity-60"
-                    placeholder="Paste your current step response here..."
+                    placeholder="Type your current step response here..."
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
                     onKeyDown={onChatTextareaKeyDown}
@@ -1505,7 +1505,9 @@ export default function Home() {
                   {getNextStage(stage) ? (
                     <div className="mt-3 flex justify-end">
                       <Button type="button" className="h-9" onClick={() => void moveToNextStage()} disabled={isLoading}>
-                        Continue to {STAGE_LABELS[getNextStage(stage) as CpsStage]}
+                        {stage === "ideate"
+                          ? "Proceed to Stage 3: Develop"
+                          : `Continue to ${STAGE_LABELS[getNextStage(stage) as CpsStage]}`}
                       </Button>
                     </div>
                   ) : null}

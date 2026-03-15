@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     if (normalized.length === 0) {
       return NextResponse.json(
         {
-          reply:
-            "Please paste your challenge using the starter **'It would be great if I/We...'**. For more information, refer to the **Clarify Step 1** section of the guide.",
+          reply: "Please share your challenge using the starter **'It would be great if I/We...'**.",
           sessionId: body.sessionId ?? null,
         },
         { status: 200 },

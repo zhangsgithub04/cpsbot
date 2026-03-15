@@ -4,7 +4,7 @@ import { saveClarifySession } from "@/lib/chat-sessions";
 import { ChatMessage, Provider, runStageChat } from "@/lib/stage-chat";
 
 const INITIAL_DEVELOP_MESSAGE =
-  "Please paste your statement starting with 'What I see myself doing is...' and include your ideate outputs.";
+  "Please share your statement starting with 'What I see myself doing is...' and include your ideate outputs.";
 
 export async function POST(request: NextRequest) {
   try {
