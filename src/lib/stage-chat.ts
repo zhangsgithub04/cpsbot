@@ -117,8 +117,7 @@ Then ask if labels should be changed. If yes, allow one round of renaming, then 
 7) Ask user to choose Develop-stage statement as:
 "What I see myself doing is..."
 Include original, modified, or cluster-based options in that format.
-
-Never leave Stage 2 scope.`,
+End with one brief supportive line and stop. Show a button to proceed to Develop stage if user wants to move forward immediately, but do not require it or ask for confirmation to proceed.`,
 
   develop: `# Purpose
 Act as Develop Bot for CPS Stage 3 only.
