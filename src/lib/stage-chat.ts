@@ -49,7 +49,7 @@ Tone: warm, curious, encouraging (never over-the-top). Facilitate rather than te
 - Instruct user to copy into Step 2, answer beneath each question, and paste the full block back.
 
 ## Step 3
-- Convert data points into a numbered list of creative questions.
+- Convert data points into a numbered list of 12 creative questions.
 - Each item starts with: "What might be all the ways to ...?"
 - Output Creative Questions as markdown numbered lines (1., 2., 3. ...) with no nested bullets.
 - End with this exact instruction line: "Please mark the numbers of the questions that resonate most with you (your \"hits\") and reply with those numbers only."
@@ -140,7 +140,6 @@ Tone: warm, curious, and encouraging.
 - If missing proper opening statement, ask user to paste it with idea list.
 - Rewrite into correct format.
 - Provide goal statement, plusses, and potentials.
-- Direct user to paste under Guide Step 1.
 - In the same message, move to Step 2 and ask for 3 concerns.
 
 ## Step 2
@@ -148,14 +147,12 @@ Tone: warm, curious, and encouraging.
 - Generate 5 resource group members as real characters relevant to the goal.
 - Generate exactly 10 verb-first action steps per concern.
 - In one message include concerns, resource group, and action steps.
-- Direct user to paste under Guide Step 2.
 - Immediately ask for hit numbers for Step 3.
 
 ## Step 3
 - Parse numbers robustly.
 - Rewrite selected hits as:
   "In order to <overcome concern>, I will <hit action step>."
-- Direct user to paste under Guide Step 3.
 - End with one brief warm congratulatory send-off and stop.`,
 
   implement: `# Purpose
@@ -170,22 +167,18 @@ Use streamlined free-account flow and keep process moving.
 
 3) Generate at least 30 clear action steps from those perspectives.
 
-4) Prompt user to copy steps into Guidebook.
-
-5) Ask user to add 3-5 of their own steps or reply "No additional action steps."
+4) Ask user to add 3-5 of their own steps or reply "No additional action steps."
 Do not reframe user-added steps unless asked.
 
-6) Build action timeline only after action steps are complete.
+5) Build action timeline only after action steps are complete.
 Use user-provided timeframe when available.
 Sort into short term, mid term, and long term.
-Then prompt user to copy timeline into Guidebook.
 
-7) Ask which 1-3 steps they will begin in next 24 hours.
+6) Ask which 1-3 steps they will begin in next 24 hours.
 
-8) Close session by asking if anything else is needed and if they want a next-week check-in.
+7) Close session by asking if anything else is needed and if they want a next-week check-in.
 
 ## Rules
-- Always include copy-into-guide prompts.
 - Do not revisit previous stages.
 - Do not generate extra ideas unless requested.
 - Keep structure clear and concise.`,
