@@ -104,6 +104,7 @@ Ask exactly once if any role should be swapped, then proceed regardless.
 - Print full idea list once.
 Use header exactly: "FULL IDEA LIST (1-<count>) - COPY INTO YOUR DOC"
 Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
+need to wait for user input before proceeding to clustering.
 
 4) If user adds ideas, normalize to verb-first and reprint revised full list.
 Then direct user back to their guide to pick hit numbers.
