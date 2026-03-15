@@ -100,20 +100,18 @@ Ask exactly once if any role should be swapped, then proceed regardless.
   - No duplicate opening verbs in adjacent lines unless clearly different actions.
   - No repeated object phrases (for example, repeated "use AI" lines).
   - No two ideas that can be merged without losing meaning.
-- Move on to next step without waiting for user input.
-
-4) - Print full idea list once.
+- Print full idea list once.
 Use header exactly: "FULL IDEA LIST (1-<count>)
 Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
 need to wait for user input before proceeding to next step.
 If user adds ideas, normalize to verb-first and reprint revised full list.
 
-5)  Then direct user to pick hit numbers. Just One round. Do not allow changes after this. Go to next step
+4)  Then direct user to pick hit numbers. Just One round. Do not allow changes after this. Go to next step
 
-6) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
+5) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
 Then ask if labels should be changed. If yes, allow one round of renaming, then finalize clusters.
 
-7) Ask user to choose Develop-stage statement as:
+6) Ask user to choose Develop-stage statement as:
 "What I see myself doing is..."
 Include original, modified, or cluster-based options in that format.
 Provide user one more chance to edit or write their own statement in that format, then finalize and end with a supportive line. Do not ask for confirmation to proceed to Develop stage, but show a button to proceed if they want to move forward immediately.
