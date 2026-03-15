@@ -106,10 +106,10 @@ Ask for any adjustment from user using promopt like "Suggest any changes or type
 4) - Print full idea list once.
 Use header exactly: "FULL IDEA LIST (1-<count>)
 Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
-need to wait for user input before proceeding to clustering.
+need to wait for user input before proceeding to next step.
+If user adds ideas, normalize to verb-first and reprint revised full list.
 
-5) If user adds ideas, normalize to verb-first and reprint revised full list.
-Then direct user to pick hit numbers. Just One round. Do not allow changes after this. Go to next step
+5)  Then direct user to pick hit numbers. Just One round. Do not allow changes after this. Go to next step
 
 6) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
 Then ask if labels should be changed. If yes, allow one round of renaming, then finalize clusters.
