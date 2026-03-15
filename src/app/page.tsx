@@ -201,7 +201,14 @@ function isStageComplete(params: {
   }
 
   if (params.stage === "develop") {
-    return /(Great work).*Develop/i.test(text) || /Identifying the most promising steps for overcoming concerns/i.test(text);
+    return (
+      /develop stage complete\./i.test(text) ||
+      /(Great work).*Develop/i.test(text) ||
+      /Identifying the most promising steps for overcoming concerns/i.test(text) ||
+      /we['’]ve completed develop stage|completed\s+develop\s+stage|next stage would be plan|develop bot,? i['’]ll pause here/i.test(
+        text,
+      )
+    );
   }
 
   return /Which 1-3 steps do you want to begin within the next 24 hours\?|Is there anything else you need today\?/i.test(text);
@@ -1507,7 +1514,9 @@ export default function Home() {
                       <Button type="button" className="h-9" onClick={() => void moveToNextStage()} disabled={isLoading}>
                         {stage === "ideate"
                           ? "Proceed to Stage 3: Develop"
-                          : `Continue to ${STAGE_LABELS[getNextStage(stage) as CpsStage]}`}
+                          : stage === "develop"
+                            ? "Proceed to Stage 4: Implement"
+                            : `Continue to ${STAGE_LABELS[getNextStage(stage) as CpsStage]}`}
                       </Button>
                     </div>
                   ) : null}
