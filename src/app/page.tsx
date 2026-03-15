@@ -196,9 +196,7 @@ function isStageComplete(params: {
   }
 
   if (params.stage === "ideate") {
-    return /(what i see myself doing is|proceed(?:ing)?\s+to\s+(?:the\s+)?develop\s+stage|continue\s+to\s+(?:the\s+)?develop\s+stage|ready\s+to\s+move\s+to\s+(?:the\s+)?develop|want\s+to\s+proceed\s+to\s+(?:the\s+)?develop\s+stage)/i.test(
-      text,
-    );
+    return /ideate stage complete\./i.test(text);
   }
 
   if (params.stage === "develop") {
@@ -212,7 +210,12 @@ function isStageComplete(params: {
     );
   }
 
-  return /Which 1-3 steps do you want to begin within the next 24 hours\?|Is there anything else you need today\?/i.test(text);
+  return (
+    /implement stage complete\. workflow complete\./i.test(text) ||
+    /thank you! i will check in with you next week|good luck starting your action steps|great choices! you will begin with|is there anything else you need help with right now\? would you like to schedule a check-in next week/i.test(
+      text,
+    )
+  );
 }
 
 function deriveGuidedStep(assistantReply: string): {
@@ -1527,12 +1530,18 @@ export default function Home() {
               {user && effectiveStageComplete ? (
                 <section className="rounded-2xl border border-[#0f2740]/20 bg-[#f7fafc] p-4 shadow-sm sm:p-5">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[#0f2740]">Stage Complete</p>
+                    <p className="text-sm font-semibold text-[#0f2740]">
+                      {stage === "implement" ? "Workflow Complete" : "Stage Complete"}
+                    </p>
                     <span className="rounded-full bg-[#dbe8f4] px-2.5 py-1 text-[11px] font-medium text-[#1f4f7a]">
                       {STAGE_LABELS[stage]}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-[#496176]">Proceed to the next stage or revisit unlocked stages.</p>
+                  <p className="mt-1 text-xs text-[#496176]">
+                    {stage === "implement"
+                      ? "Congratulations. You completed all four CPS stages and finished the full workflow."
+                      : "Proceed to the next stage or revisit unlocked stages."}
+                  </p>
 
                   {getNextStage(stage) ? (
                     <div className="mt-3 flex justify-end">
