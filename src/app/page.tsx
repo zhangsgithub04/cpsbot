@@ -195,7 +195,7 @@ function isStageComplete(params: {
   }
 
   if (params.stage === "ideate") {
-    return /(As stated in Step 6 in the Google Guide|Please paste the exact sentence into the text box found in Step 6|What I see myself doing is\.\.\.)/i.test(
+    return /(As stated in Step 6 in the Google Guide|Please paste the exact sentence into the text box found in Step 6|What I see myself doing is\.\.\.|proceed(?:ing)?\s+to\s+develop\s+stage|continue\s+to\s+develop\s+stage|ready\s+to\s+move\s+to\s+develop)/i.test(
       text,
     );
   }
