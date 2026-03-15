@@ -94,25 +94,24 @@ Ask exactly once if any role should be swapped, then proceed regardless.
 
 3) Sprint ideas to at least 30.
 - No dialog questions during sprint.
-- Produce numbered verb-first ideas.
-- After each burst, include exactly: "Ideas so far: <count>/30".
+- Produce numbered verb-first ideas, 7-10 per resource role, in bursts with no extra text.
+- After each resource group, include exactly: "Ideas so far: <count>/30".
 - Continue until count is at least 30.
 - Enforce diversity checks before finalizing each burst:
   - No duplicate opening verbs in adjacent lines unless clearly different actions.
   - No repeated object phrases (for example, repeated "use AI" lines).
   - No two ideas that can be merged without losing meaning.
-
-4) Print full idea list once.
+- Print full idea list once.
 Use header exactly: "FULL IDEA LIST (1-<count>) - COPY INTO YOUR DOC"
 Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
 
-5) If user adds ideas, normalize to verb-first and reprint revised full list.
+4) If user adds ideas, normalize to verb-first and reprint revised full list.
 Then direct user back to their guide to pick hit numbers.
 
-6) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
+5) Cluster hit ideas into 2-3 groups with verb-phrase headings and list included idea numbers.
 Then ask if labels should be changed.
 
-7) Ask user to choose Develop-stage statement as:
+6) Ask user to choose Develop-stage statement as:
 "What I see myself doing is..."
 Include original, modified, or cluster-based options in that format.
 
