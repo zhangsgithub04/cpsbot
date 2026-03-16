@@ -19,6 +19,43 @@ type ChatSessionDoc = {
 
 type ChatSessionRecord = WithId<ChatSessionDoc>;
 
+function messagesEqual(a: StoredChatMessage, b: StoredChatMessage): boolean {
+  return a.role === b.role && a.content === b.content;
+}
+
+function findSuffixPrefixOverlap(existing: StoredChatMessage[], incoming: StoredChatMessage[]): number {
+  const maxOverlap = Math.min(existing.length, incoming.length);
+
+  for (let size = maxOverlap; size > 0; size -= 1) {
+    let matches = true;
+
+    for (let index = 0; index < size; index += 1) {
+      const existingMessage = existing[existing.length - size + index];
+      const incomingMessage = incoming[index];
+      if (!existingMessage || !incomingMessage || !messagesEqual(existingMessage, incomingMessage)) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (matches) return size;
+  }
+
+  return 0;
+}
+
+function mergeSessionMessages(existing: StoredChatMessage[], incoming: StoredChatMessage[]): StoredChatMessage[] {
+  if (existing.length === 0) return incoming;
+  if (incoming.length === 0) return existing;
+
+  const overlap = findSuffixPrefixOverlap(existing, incoming);
+  if (overlap > 0) {
+    return [...existing, ...incoming.slice(overlap)];
+  }
+
+  return [...existing, ...incoming];
+}
+
 export type ChatSessionSummary = {
   id: string;
   title: string;
@@ -56,35 +93,46 @@ export async function saveClarifySession(params: {
 }): Promise<string> {
   const db = await getDb();
   const now = new Date();
-  const title = makeTitle(params.messages);
-  const topicPrompt = makeTopicPrompt(params.messages);
+  let mergedMessages = params.messages;
 
   if (params.sessionId) {
     const parsedId = ObjectId.isValid(params.sessionId) ? new ObjectId(params.sessionId) : null;
     if (parsedId) {
-      const updateResult = await db.collection<ChatSessionDoc>("clarify_sessions").updateOne(
-        { _id: parsedId, userId: params.userId },
-        {
-          $set: {
-            title,
-            topicPrompt,
-            messages: params.messages,
-            updatedAt: now,
-          },
-        },
-      );
+      const existing = (await db.collection<ChatSessionDoc>("clarify_sessions").findOne({
+        _id: parsedId,
+        userId: params.userId,
+      })) as ChatSessionRecord | null;
 
-      if (updateResult.matchedCount > 0) {
+      if (existing) {
+        mergedMessages = mergeSessionMessages(existing.messages ?? [], params.messages);
+        const title = makeTitle(mergedMessages);
+        const topicPrompt = makeTopicPrompt(mergedMessages);
+
+        await db.collection<ChatSessionDoc>("clarify_sessions").updateOne(
+          { _id: parsedId, userId: params.userId },
+          {
+            $set: {
+              title,
+              topicPrompt,
+              messages: mergedMessages,
+              updatedAt: now,
+            },
+          },
+        );
+
         return parsedId.toHexString();
       }
     }
   }
 
+  const title = makeTitle(mergedMessages);
+  const topicPrompt = makeTopicPrompt(mergedMessages);
+
   const insertResult = await db.collection<ChatSessionDoc>("clarify_sessions").insertOne({
     userId: params.userId,
     title,
     topicPrompt,
-    messages: params.messages,
+    messages: mergedMessages,
     isSessionShared: false,
     isTopicShared: false,
     createdAt: now,
@@ -166,10 +214,28 @@ export async function setClarifySessionSharing(params: {
   sessionId: string;
   target: "session" | "topic";
   isShared: boolean;
+  topicPrompt?: string;
 }): Promise<boolean> {
   if (!ObjectId.isValid(params.sessionId)) return false;
 
-  const fieldToUpdate = params.target === "topic" ? "isTopicShared" : "isSessionShared";
+  const normalizedTopicPrompt = (params.topicPrompt ?? "").trim();
+  const setPayload: {
+    isTopicShared?: boolean;
+    isSessionShared?: boolean;
+    topicPrompt?: string;
+    updatedAt: Date;
+  } = {
+    updatedAt: new Date(),
+  };
+
+  if (params.target === "topic") {
+    setPayload.isTopicShared = params.isShared;
+    if (params.isShared && normalizedTopicPrompt.length > 0) {
+      setPayload.topicPrompt = normalizedTopicPrompt;
+    }
+  } else {
+    setPayload.isSessionShared = params.isShared;
+  }
 
   const db = await getDb();
   const result = await db.collection<ChatSessionDoc>("clarify_sessions").updateOne(
@@ -178,10 +244,7 @@ export async function setClarifySessionSharing(params: {
       userId: params.userId,
     },
     {
-      $set: {
-        [fieldToUpdate]: params.isShared,
-        updatedAt: new Date(),
-      },
+      $set: setPayload,
     },
   );
 

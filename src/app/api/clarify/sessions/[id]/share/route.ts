@@ -9,7 +9,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
     }
 
-    const body = (await request.json()) as { isShared?: boolean; target?: "session" | "topic" };
+    const body = (await request.json()) as {
+      isShared?: boolean;
+      target?: "session" | "topic";
+      topicPrompt?: string;
+    };
     const { id } = await context.params;
     const isShared = Boolean(body.isShared);
     const target = body.target === "topic" ? "topic" : "session";
@@ -19,6 +23,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       sessionId: id,
       target,
       isShared,
+      topicPrompt: body.topicPrompt,
     });
 
     if (!updated) {

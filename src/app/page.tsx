@@ -325,6 +325,9 @@ export default function Home() {
   const [onlineUsers, setOnlineUsers] = useState<PublicUser[]>([]);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
+  const [topicShareSessionId, setTopicShareSessionId] = useState<string | null>(null);
+  const [topicShareDraft, setTopicShareDraft] = useState("");
+  const [isSharingTopic, setIsSharingTopic] = useState(false);
 
   useEffect(() => {
     async function loadSession() {
@@ -348,6 +351,9 @@ export default function Home() {
       setSharedTopics([]);
       setOnlineUsers([]);
       setActiveSessionId(null);
+      setTopicShareSessionId(null);
+      setTopicShareDraft("");
+      setIsSharingTopic(false);
       return;
     }
 
@@ -685,23 +691,59 @@ export default function Home() {
     sessionId: string,
     target: "session" | "topic",
     isShared: boolean,
-  ): Promise<void> {
+    topicPrompt?: string,
+  ): Promise<boolean> {
     const response = await fetch(`/api/clarify/sessions/${encodeURIComponent(sessionId)}/share`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ target, isShared }),
+      body: JSON.stringify({ target, isShared, topicPrompt }),
     });
 
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) {
       setError(payload.error ?? "Failed to update sharing setting.");
-      return;
+      return false;
     }
 
     await refreshSessions();
     await refreshSharedTopics();
+    return true;
+  }
+
+  function beginTopicShare(session: ChatSessionSummary): void {
+    setTopicShareSessionId(session.id);
+    setTopicShareDraft(session.topicPrompt || "It would be great if I/We...");
+    setError("");
+  }
+
+  function cancelTopicShare(): void {
+    setTopicShareSessionId(null);
+    setTopicShareDraft("");
+    setIsSharingTopic(false);
+  }
+
+  async function confirmTopicShare(): Promise<void> {
+    if (!topicShareSessionId || isSharingTopic) return;
+
+    const draft = topicShareDraft.trim();
+    if (!draft) {
+      setError("Please finalize a topic prompt before sharing.");
+      return;
+    }
+
+    setIsSharingTopic(true);
+    setError("");
+
+    try {
+      const updated = await toggleSessionShare(topicShareSessionId, "topic", true, draft);
+      if (updated) {
+        cancelTopicShare();
+      }
+    } finally {
+      setIsSharingTopic(false);
+    }
   }
 
   function applySharedTopic(topicPrompt: string): void {
@@ -1052,6 +1094,27 @@ export default function Home() {
 
               {sidebarTab === "sessions" ? (
                 <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                  {topicShareSessionId ? (
+                    <div className="rounded-xl border border-[#2f6a4f]/40 bg-[#f4faf6] p-3">
+                      <p className="text-xs font-semibold text-[#214734]">Finalize Challenge Topic Before Sharing</p>
+                      <textarea
+                        className="mt-2 min-h-20 w-full resize-y rounded-lg border border-black/15 bg-white px-2.5 py-2 text-xs outline-none focus:border-[#2f6a4f]"
+                        value={topicShareDraft}
+                        onChange={(event) => setTopicShareDraft(event.target.value)}
+                        placeholder="Refine the challenge topic that will appear in Shared Topics."
+                        disabled={isSharingTopic}
+                      />
+                      <div className="mt-2 flex items-center justify-end gap-2">
+                        <Button type="button" variant="outline" className="h-7 text-[11px]" onClick={cancelTopicShare}>
+                          Cancel
+                        </Button>
+                        <Button type="button" className="h-7 text-[11px]" onClick={() => void confirmTopicShare()} disabled={isSharingTopic}>
+                          {isSharingTopic ? "Sharing..." : "Finalize and Share"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {savedSessions.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No saved sessions yet.</p>
                   ) : (
@@ -1081,9 +1144,13 @@ export default function Home() {
                             type="button"
                             variant="outline"
                             className="h-7 text-[11px]"
-                            onClick={() =>
-                              void toggleSessionShare(session.id, "topic", !session.isTopicShared)
-                            }
+                            onClick={() => {
+                              if (session.isTopicShared) {
+                                void toggleSessionShare(session.id, "topic", false);
+                                return;
+                              }
+                              beginTopicShare(session);
+                            }}
                           >
                             {session.isTopicShared ? "Unshare Topic" : "Share Topic"}
                           </Button>
