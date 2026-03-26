@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+  isValidElement,
+  useEffect,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -40,6 +47,11 @@ type GuidedStage = "challenge" | "gather" | "hits" | "complete";
 type LlmProvider = "openai" | "gemini";
 type CpsStage = "clarify" | "ideate" | "develop" | "implement";
 type SidebarTab = "sessions" | "topics" | "online";
+
+const IDEATE_FINAL_EDIT_PROMPT = 'Share any final edits to your chosen statement, or type "no changes".';
+const IDEATE_ADDITIONS_PROMPT_REGEX = /add 1-3 more ideas,\s*or type\s*["']no addition["']\.?/i;
+const IDEATE_HITS_PROMPT_REGEX =
+  /pick hit numbers|submit (their )?numbers|reply with (those )?numbers|mark the numbers?.*hits?/i;
 
 const INITIAL_ASSISTANT_MESSAGES: Record<CpsStage, string> = {
   clarify:
@@ -178,6 +190,22 @@ function parseIdeateIdeasFromContent(content: string): Array<{ number: number; t
 
 function getLastAssistantContent(messages: ChatMessage[]): string {
   return [...messages].reverse().find((item) => item.role === "assistant")?.content?.trim() ?? "";
+}
+
+function getPlainTextFromNode(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => getPlainTextFromNode(child)).join("");
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return getPlainTextFromNode(node.props.children ?? "");
+  }
+
+  return "";
 }
 
 function isStageComplete(params: {
@@ -995,8 +1023,15 @@ export default function Home() {
   const lastAssistantContent = getLastAssistantContent(messages);
   const lastUserContent = [...messages].reverse().find((item) => item.role === "user")?.content?.trim() ?? "";
   const ideateIdeas = parseIdeateIdeasFromContent(lastAssistantContent);
+  const ideateAwaitingAdditions =
+    stage === "ideate" &&
+    IDEATE_ADDITIONS_PROMPT_REGEX.test(lastAssistantContent) &&
+    !IDEATE_HITS_PROMPT_REGEX.test(lastAssistantContent);
   const showIdeateIdeasChecklist =
-    stage === "ideate" && /FULL IDEA LIST|REVISED FULL IDEA LIST/i.test(lastAssistantContent) && ideateIdeas.length > 0;
+    stage === "ideate" &&
+    !ideateAwaitingAdditions &&
+    IDEATE_HITS_PROMPT_REGEX.test(lastAssistantContent) &&
+    ideateIdeas.length > 0;
   const inferredRefinedQuestion =
     refinedQuestion.trim().length > 0 ? refinedQuestion.trim() : isFocusQuestion(lastUserContent) ? lastUserContent : "";
   const currentStageComplete = isStageComplete({
@@ -1361,7 +1396,22 @@ export default function Home() {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          p: ({ children }) => <p className="mb-2 whitespace-pre-wrap last:mb-0">{children}</p>,
+                          p: ({ children }) => {
+                            const text = getPlainTextFromNode(children).trim();
+                            const isFinalEditPrompt = text === IDEATE_FINAL_EDIT_PROMPT;
+
+                            return (
+                              <p
+                                className={`mb-2 whitespace-pre-wrap last:mb-0 ${
+                                  isFinalEditPrompt
+                                    ? "rounded-lg border border-[#c39f2e] bg-[#fff6da] px-3 py-2 font-semibold text-[#6b4f00]"
+                                    : ""
+                                }`}
+                              >
+                                {children}
+                              </p>
+                            );
+                          },
                           ul: ({ children }) => <ul className="mb-2 list-disc pl-5 last:mb-0">{children}</ul>,
                           ol: ({ children }) => <ol className="mb-2 list-decimal pl-5 last:mb-0">{children}</ol>,
                           li: ({ children }) => <li className="mb-1">{children}</li>,

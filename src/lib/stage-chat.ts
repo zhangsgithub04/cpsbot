@@ -7,6 +7,83 @@ export type Provider = "openai" | "gemini";
 
 export type CpsStage = "clarify" | "ideate" | "develop" | "implement";
 
+export const IDEATE_FINAL_EDIT_PROMPT =
+  'Share any final edits to your chosen statement, or type "no changes".';
+
+export const IDEATE_ADDITIONS_PROMPT = 'Add 1-3 more ideas, or type "no addition".';
+
+export const DEVELOP_FINAL_EDIT_PROMPT = 'Share any final edits, or type "no changes".';
+
+const IDEATE_FINAL_EDIT_PROMPT_REGEX = /share any final edits to your chosen statement,?\s*or type\s*["']no changes["']\.?/i;
+
+function normalizeIdeateReply(reply: string): string {
+  const trimmed = reply.trim();
+
+  if (/ideate stage complete\./i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (!IDEATE_FINAL_EDIT_PROMPT_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+
+  const keptLines = trimmed
+    .split("\n")
+    .filter((line) => !IDEATE_FINAL_EDIT_PROMPT_REGEX.test(line.trim()))
+    .join("\n")
+    .trim();
+
+  return keptLines.length > 0 ? `${keptLines}\n${IDEATE_FINAL_EDIT_PROMPT}` : IDEATE_FINAL_EDIT_PROMPT;
+}
+
+export function isValidIdeateFinalEditInput(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^no changes\.?$/i.test(trimmed)) {
+    return true;
+  }
+
+  return /^what i see myself doing is\b/i.test(trimmed);
+}
+
+export function isValidIdeateAdditionsInput(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^no addition\.?$/i.test(trimmed)) {
+    return true;
+  }
+
+  const lines = trimmed
+    .split(/\n+/)
+    .map((line) => line.trim().replace(/^[-*•]\s+/, "").replace(/^\d{1,2}\s*[).]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length < 1 || lines.length > 3) {
+    return false;
+  }
+
+  return lines.every((line) => line.length >= 3 && !/^(continue|next|ok|okay|proceed|go on)\.?$/i.test(line));
+}
+
+export function isValidDevelopFinalEditInput(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^no changes\.?$/i.test(trimmed)) {
+    return true;
+  }
+
+  return !/^(continue|next|ok|okay|proceed|go on)\.?$/i.test(trimmed) && trimmed.length >= 3;
+}
+
 const STAGE_SYSTEM_PROMPTS: Record<CpsStage, string> = {
   clarify: `# Role & Purpose
 Act as Clarify Bot, a seasoned CPS facilitator guiding users through the Clarify stage only.
@@ -92,6 +169,7 @@ If invalid, ask user to restate with one of those openers and a question mark.
 2) Lock challenge and briefly announce a resource-group sprint.
 Create 3-5 tailored resource roles, including at least one non-human perspective and one domain-aligned role.
 Ask exactly once if any role should be swapped, then proceed regardless.
+Do not wait for a reply to that swap question.
 
 3) Sprint ideas to at least 30.
 - No dialog questions during sprint.
@@ -104,7 +182,7 @@ Ask exactly once if any role should be swapped, then proceed regardless.
   - No two ideas that can be merged without losing meaning.
 - Print full idea list once.
 Use header exactly: "FULL IDEA LIST (1-<count>)
-Then ask exactly one line inviting user to add 0-3 ideas or type "no ideas".
+Then ask exactly one line: "Add 1-3 more ideas, or type \"no addition\"."
 need to wait for user input before proceeding to next step.
 If user adds ideas, normalize to verb-first and reprint revised full list.
 
@@ -136,11 +214,6 @@ Tone: warm, curious, and encouraging.
 - Stay in Develop only.
 - Require exactly six user prompts:
   1) Opening statement starting with "What I see myself doing is..."
-  2) Concern 1
-  3) Concern 2
-  4) Concern 3
-  5) Hit numbers for action steps
-  6) Final edits or "no changes"
 - Minimum thresholds:
   - Plusses: 3
   - Potentials: 3
@@ -150,10 +223,23 @@ Tone: warm, curious, and encouraging.
 - Never ask for confirmation to proceed.
 
 ## Step 1
-- If missing proper opening statement, ask user to share it with idea list.
-- Rewrite into correct format.
-- Provide goal statement, plusses, and potentials.
-- In the same message, move to Step 2 and ask only for Concern 1.
+Take the The goal statement you came up with at the end of the Ideate Stage and paste it in the text box below. 
+Additionally provide an prompt directing user to provide the following input ( goal statement, plusses, and potentials) in any format, and you will parse and normalize it into the correct format. If any piece is missing, ask only for that piece and wait.
+1. Identify three plusses for your idea. Think of plusses as the current strengths or benefits to you or to others of your idea. Add the plusses in the text box below in the plusses section.
+2. Identify three possible opportunities that might arise if you achieve your goal. The potentials are what’s going to be beneficial down the road. Add the potentials in the text box below in the potentials section.
+
+Goal statement: What I see myself doing is…
+Plusses: 
+Plus 1: 
+Plus 2: 
+Plus 3: 
+Potentials: 
+1.	It might…
+2.	It might…
+3.	It might…
+
+- If the input doesn't following the expectation, missing proper elements, ask user to restate with the required format and wait for the next message.
+- If the input meet the above format and expectation, move to Step 2 and explain three concerns will be collected, one by one. From asking only for Concern 1.
 
 ## Step 2
 - Collect concerns one by one across turns, by indicating 3 concerns will be collected and asking for them in sequence.
@@ -349,7 +435,14 @@ export async function runStageChat(params: {
   messages: ChatMessage[];
   provider: Provider;
 }): Promise<string> {
-  return params.provider === "gemini"
-    ? callGemini(params.stage, params.messages)
-    : callOpenAI(params.stage, params.messages);
+  const reply =
+    params.provider === "gemini"
+      ? await callGemini(params.stage, params.messages)
+      : await callOpenAI(params.stage, params.messages);
+
+  if (params.stage === "ideate") {
+    return normalizeIdeateReply(reply);
+  }
+
+  return reply;
 }
