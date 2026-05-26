@@ -208,6 +208,18 @@ function getPlainTextFromNode(node: ReactNode): string {
   return "";
 }
 
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const plainMatch = header.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1]?.trim() || null;
+}
+
 function isStageComplete(params: {
   stage: CpsStage;
   guidedStage: GuidedStage;
@@ -352,6 +364,7 @@ export default function Home() {
   const [sharedTopics, setSharedTopics] = useState<SharedTopicSummary[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<PublicUser[]>([]);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [downloadingSessionId, setDownloadingSessionId] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
   const [topicShareSessionId, setTopicShareSessionId] = useState<string | null>(null);
   const [topicShareDraft, setTopicShareDraft] = useState("");
@@ -715,6 +728,48 @@ export default function Home() {
     await refreshSharedTopics();
   }
 
+  async function downloadSessionDocx(session: ChatSessionSummary): Promise<void> {
+    if (downloadingSessionId) return;
+
+    setDownloadingSessionId(session.id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/clarify/sessions/${encodeURIComponent(session.id)}?format=docx`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        let message = "Failed to download Word document.";
+        try {
+          const payload = (await response.json()) as { error?: string };
+          message = payload.error ?? message;
+        } catch {
+          // If JSON parse fails, keep fallback message.
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const filename =
+        filenameFromContentDisposition(response.headers.get("Content-Disposition")) ?? `${session.title}.docx`;
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Failed to download Word document.";
+      setError(message);
+    } finally {
+      setDownloadingSessionId(null);
+    }
+  }
+
   async function toggleSessionShare(
     sessionId: string,
     target: "session" | "topic",
@@ -1004,6 +1059,26 @@ export default function Home() {
     }
   }
 
+  function adoptSelectedFocusOptionWithoutCombine(): void {
+    const options = selectedFocusOptions.map((idx) => focusOptions[idx]).filter(Boolean);
+
+    if (options.length === 0) {
+      setCombineError("Select at least one question to adopt.");
+      return;
+    }
+
+    if (options.length > 1) {
+      setCombineError("Select exactly one question to adopt, or use AI Combine for multiple selections.");
+      return;
+    }
+
+    const selectedQuestion = options[0] || "";
+    setFocusDraft(selectedQuestion);
+    setRefinedQuestion(selectedQuestion);
+    setCombineError("");
+    setGuidedError("");
+  }
+
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,#f7eed4_0%,#edf2f4_45%,#eaf4eb_100%)] p-4 sm:p-8">
@@ -1175,6 +1250,15 @@ export default function Home() {
                         </button>
 
                         <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={() => void downloadSessionDocx(session)}
+                            disabled={downloadingSessionId === session.id}
+                          >
+                            {downloadingSessionId === session.id ? "Downloading..." : "Download Word"}
+                          </Button>
                           <Button
                             type="button"
                             variant="outline"
@@ -1630,7 +1714,7 @@ export default function Home() {
                 <section className="space-y-3 rounded-2xl border border-[#2f6a4f]/20 bg-[#f4faf6] p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[#214734]">Step 5 - Focus Question Composer</p>
-                    <span className="text-xs text-muted-foreground">Select multiple and combine</span>
+                    <span className="text-xs text-muted-foreground">Select question(s) below</span>
                   </div>
                   <p className="rounded-lg border border-[#cddfd3] bg-white px-3 py-2 text-xs text-[#315943]">
                     Chat is disabled at the final step. You can finalize your Focus Question below.
@@ -1672,18 +1756,15 @@ export default function Home() {
                       disabled={combineLoading || selectedFocusOptions.length < 2}
                       onClick={() => void combineSelectedFocusOptions()}
                     >
-                      {combineLoading ? "Combining..." : "Combine with AI"}
+                      {combineLoading ? "Combining..." : "AI Combine Selected"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={selectedFocusOptions.length !== 1}
-                      onClick={() => {
-                        const idx = selectedFocusOptions[0];
-                        if (idx !== undefined) setFocusDraft(focusOptions[idx] || "");
-                      }}
+                      disabled={combineLoading || selectedFocusOptions.length === 0}
+                      onClick={adoptSelectedFocusOptionWithoutCombine}
                     >
-                      Use Selected As Draft
+                      Adopt Without Combine
                     </Button>
                   </div>
 
